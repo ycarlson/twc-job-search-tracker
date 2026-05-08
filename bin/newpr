@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# newpr — create a feature branch, commit current changes, push, and open a PR.
+#
+# Usage:
+#   ./bin/newpr "<commit message>"
+#
+# Example:
+#   ./bin/newpr "feat: add monthly rollup summary"
+#
+# Prerequisites:
+#   - gh CLI installed and authenticated (gh auth login)
+#   - You're inside the repo with uncommitted changes ready to ship
+
+set -euo pipefail
+
+if [ $# -eq 0 ]; then
+    echo "Usage: $0 \"<commit message>\""
+    echo "Example: $0 \"feat: add monthly summary\""
+    exit 1
+fi
+
+COMMIT_MSG="$1"
+
+# Sanity check: are there any changes to commit?
+if [ -z "$(git status --porcelain)" ]; then
+    echo "Nothing to commit. Make some changes first."
+    exit 1
+fi
+
+# Generate a branch slug from the commit message
+# (lowercase, alphanumeric and hyphens only, max 50 chars)
+SLUG=$(echo "$COMMIT_MSG" \
+    | tr '[:upper:]' '[:lower:]' \
+    | sed -E 's/[^a-z0-9]+/-/g' \
+    | sed -E 's/^-+|-+$//g' \
+    | cut -c1-50)
+
+if [ -z "$SLUG" ]; then
+    echo "Could not generate a branch name from your commit message."
+    exit 1
+fi
+
+echo "Branch: $SLUG"
+
+# Create the branch
+git checkout -b "$SLUG"
+
+# Stage all changes and commit
+git add -A
+git commit -m "$COMMIT_MSG"
+
+# Push the branch and set upstream
+git push -u origin "$SLUG"
+
+# Open the PR. --fill uses the commit message as title and body.
+# The PR template at .github/pull_request_template.md will populate the body
+# when you edit the PR on GitHub if you'd like to fill it out properly.
+gh pr create --base main --fill
+
+echo ""
+echo "PR created. View it in your browser with:"
+echo "  gh pr view --web"
